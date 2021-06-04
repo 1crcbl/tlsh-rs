@@ -190,9 +190,3 @@ pub(crate) fn l_capturing(len: usize) -> Result<usize, TlshError> {
 
     Err(TlshError::DataLenOverflow)
 }
-
-pub(crate) fn hex_swap(byte: u32) -> u32 {
-    let mut result = ((byte & 0xF0) >> 4) & 0x0F;
-    result |= ((byte & 0x0F) << 4) & 0xF0;
-    return result;
-}

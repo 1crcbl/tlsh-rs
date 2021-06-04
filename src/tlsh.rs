@@ -1,6 +1,9 @@
-use crate::helper::{b_mapping, find_quartiles, hex_swap, l_capturing, BUCKET_SIZE, WINDOW_SIZE};
+use crate::helper::{b_mapping, find_quartiles, l_capturing, BUCKET_SIZE, WINDOW_SIZE};
 
-#[derive(Debug)]
+/// A struct containing all required information from an input stream to generate a hash value.
+///
+/// An instance of this struct can be obtained by calling the function [`TlshBuilder::build`].
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Tlsh {
     ver: Version,
     checksum: Vec<u8>,
@@ -11,15 +14,26 @@ pub struct Tlsh {
 }
 
 impl Tlsh {
+    /// Computes and returns the hash value in hex-encoded string format.
     pub fn hash(&self) -> String {
         let cap = self.ver.ver().len() + self.codes.len() * 2 + self.checksum.len() * 2 + 4;
         let mut result = String::with_capacity(cap);
         result.push_str(self.ver.ver());
 
         for ii in 0..self.checksum.len() {
-            result.push_str(&format!("{:02X}", hex_swap(self.checksum[ii] as u32)));
+            result.push_str(
+                &format!("{:02X}", self.checksum[ii])
+                    .chars()
+                    .rev()
+                    .collect::<String>(),
+            );
         }
-        result.push_str(&format!("{:02X}", hex_swap(self.len as u32)));
+        result.push_str(
+            &format!("{:02X}", self.len as u32)
+                .chars()
+                .rev()
+                .collect::<String>(),
+        );
         result.push_str(&format!("{:02X}", self.q1ratio << 4 | self.q2ratio));
 
         let len = self.codes.len();
@@ -31,6 +45,8 @@ impl Tlsh {
     }
 }
 
+/// A builder struct for processing input stream(s).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TlshBuilder {
     buckets: [u32; BUCKET_SIZE],
     bucket_count: usize,
@@ -44,6 +60,7 @@ pub struct TlshBuilder {
 }
 
 impl TlshBuilder {
+    /// Constructs a new builder based on the number of buckets, checksum length and version.
     pub fn new(bucket: BucketKind, checksum: ChecksumKind, ver: Version) -> Self {
         let bucket_count = bucket.bucket_count();
         let checksum_len = checksum.checksum_len();
@@ -61,11 +78,12 @@ impl TlshBuilder {
         }
     }
 
+    /// Computes the quartiles and constructs the digest message and returns an instance of [`Tlsh`]
+    /// that has all information needed to generate a hash value.
     pub fn build(&self) -> Tlsh {
         let (q1, q2, q3) = find_quartiles(&self.buckets, self.bucket_count);
 
         if q3 == 0 {
-            // TODO change to Result
             panic!("q3 = 0")
         }
 
@@ -108,10 +126,17 @@ impl TlshBuilder {
         }
     }
 
+    /// Processes an input stream.
     pub fn update(&mut self, data: &[u8]) {
         self.update_from(data, 0, data.len());
     }
 
+    /// Reads an input stream from an offset an processes it.
+    ///
+    /// # Parameters
+    /// * data: input data to be added
+    /// * offset: index in array from which data will be read
+    /// * len: number of bytes to be read
     pub fn update_from(&mut self, data: &[u8], offset: usize, len: usize) {
         let mut j0 = self.data_len % WINDOW_SIZE;
         let (mut j1, mut j2, mut j3, mut j4) = (
@@ -213,6 +238,7 @@ impl TlshBuilder {
         self.data_len += len;
     }
 
+    /// Clears the state of a builder, removing all data.
     pub fn reset(&mut self) {
         self.buckets.fill(0);
         self.checksum = 0;
@@ -221,6 +247,7 @@ impl TlshBuilder {
     }
 }
 
+/// An enum determining the number of buckets for hashing
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum BucketKind {
     ///
@@ -230,6 +257,7 @@ pub enum BucketKind {
 }
 
 impl BucketKind {
+    /// Returns the number of buckets.
     pub fn bucket_count(&self) -> usize {
         match self {
             BucketKind::Bucket128 => 128,
@@ -237,11 +265,13 @@ impl BucketKind {
         }
     }
 }
+
+/// An enum determining the length of checksum.
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum ChecksumKind {
-    ///
+    /// TLSH uses one byte for checksum. The collision rate is 1/24.
     OneByte,
-    ///
+    /// TLSH uses three bytes for checksum. The collision rate is 1/5800.
     ThreeByte,
 }
 
@@ -254,10 +284,12 @@ impl ChecksumKind {
     }
 }
 
+/// An enum representing the version of TLSH
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum Version {
+    /// Original version, mapping to an empty string ```""```.
     Original,
-
+    /// Current version, mapping to an string ```"T1"```.
     Version4,
 }
 
