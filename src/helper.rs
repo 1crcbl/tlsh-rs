@@ -1,3 +1,5 @@
+use std::ops::{Add, Sub};
+
 use crate::error::TlshError;
 
 pub(crate) const BUCKET_SIZE: usize = 256;
@@ -40,6 +42,9 @@ pub(crate) const TOPVAL: [usize; 170] = [
 ];
 
 const _MAX_DATA_LEN: usize = TOPVAL[TOPVAL.len() - 1];
+
+static mut BIT_PAIRS_FLAG: bool = false;
+static mut BIT_PAIRS_DIFF: [[usize; 256]; 256] = [[0; 256]; 256];
 
 pub(crate) fn b_mapping(salt: u8, ii: u8, jj: u8, kk: u8) -> u8 {
     let mut h = 0;
@@ -189,4 +194,56 @@ pub(crate) fn l_capturing(len: usize) -> Result<usize, TlshError> {
     }
 
     Err(TlshError::DataLenOverflow)
+}
+
+pub(crate) fn mod_diff<T>(x: T, y: T, circ_q: T) -> T
+where
+    T: Copy + PartialEq + Ord + Add<Output = T> + Sub<Output = T>,
+{
+    let (dl, dr) = if x >= y {
+        (x - y, y + circ_q - x)
+    } else {
+        (y - x, x + circ_q - y)
+    };
+
+    std::cmp::min(dl, dr)
+}
+
+pub(crate) fn bit_distance(x: &[u8], y: &[u8]) -> usize {
+    let mut result = 0;
+
+    for ii in 0..x.len() {
+        unsafe {
+            result += bit_pairs_diff(x[ii] as usize, y[ii] as usize);
+        }
+    }
+
+    result
+}
+
+#[inline]
+unsafe fn bit_pairs_diff(row: usize, col: usize) -> usize {
+    let f = |x: &mut i16, y: &mut i16, diff: &mut i16| {
+        let d = (*x % 4 - *y % 4).abs();
+        *diff += if d == 3 { 6 } else { d };
+
+        *x /= 4;
+        *y /= 4;
+    };
+
+    if !BIT_PAIRS_FLAG {
+        for ii in 0..256i16 {
+            for jj in 0..256 {
+                let (mut x, mut y, mut diff) = (ii, jj, 0);
+                for _ in 0..4 {
+                    f(&mut x, &mut y, &mut diff);
+                }
+
+                BIT_PAIRS_DIFF[ii as usize][jj as usize] = diff as usize;
+            }
+        }
+        BIT_PAIRS_FLAG = true;
+    }
+
+    BIT_PAIRS_DIFF[row][col]
 }

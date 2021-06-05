@@ -1,4 +1,6 @@
-use crate::helper::{b_mapping, find_quartiles, l_capturing, BUCKET_SIZE, WINDOW_SIZE};
+use crate::helper::{
+    b_mapping, bit_distance, find_quartiles, l_capturing, mod_diff, BUCKET_SIZE, WINDOW_SIZE,
+};
 
 /// A struct containing all required information from an input stream to generate a hash value.
 ///
@@ -8,8 +10,8 @@ pub struct Tlsh {
     ver: Version,
     checksum: Vec<u8>,
     len: usize,
-    q1ratio: u32,
-    q2ratio: u32,
+    q1ratio: usize,
+    q2ratio: usize,
     codes: Vec<u8>,
 }
 
@@ -40,6 +42,39 @@ impl Tlsh {
         for ii in 0..len {
             result.push_str(&format!("{:02X}", self.codes[len - 1 - ii]));
         }
+
+        result
+    }
+
+    /// Calculates the difference between two TLSH values.
+    pub fn diff(&self, other: &Tlsh, with_len: bool) -> usize {
+        let mut result = 0;
+
+        if with_len {
+            match mod_diff(self.len, other.len, 256) {
+                x @ 0..=1 => result = x,
+                x @ _ => result = x * 12,
+            };
+        }
+
+        match mod_diff(self.q1ratio, other.q1ratio, 16) {
+            x @ 0..=1 => result += x,
+            x @ _ => result += (x - 1) * 12,
+        }
+
+        match mod_diff(self.q2ratio, other.q2ratio, 16) {
+            x @ 0..=1 => result += x,
+            x @ _ => result += (x - 1) * 12,
+        }
+
+        for ii in 0..self.checksum.len() {
+            if self.checksum[ii] != other.checksum[ii] {
+                result += 1;
+                break;
+            }
+        }
+
+        result += bit_distance(&self.codes, &other.codes);
 
         result
     }
@@ -107,8 +142,8 @@ impl TlshBuilder {
         }
 
         let len = l_capturing(self.data_len).unwrap();
-        let q1ratio = (((q1 as f64 * 100.) / (q3 as f64)) as u32) % 16;
-        let q2ratio = (((q2 as f64 * 100.) / (q3 as f64)) as u32) % 16;
+        let q1ratio = (((q1 as f64 * 100.) / (q3 as f64)) as usize) % 16;
+        let q2ratio = (((q2 as f64 * 100.) / (q3 as f64)) as usize) % 16;
 
         let checksum = if self.checksum_len == 1 {
             vec![self.checksum]

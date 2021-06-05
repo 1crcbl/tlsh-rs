@@ -1,9 +1,16 @@
 [package]
-name = "tlsh-rs"
+name = "tlsh"
 version = "0.1.0"
 authors = ["1crcbl <1crcbl@protonmail.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "BSD OR Apache-2.0"
+
+readme = "README.md"
+description = "Rust port of Trend Micro Locality Sensitive Hashing"
+repository = "https://github.com/1crcbl/tlsh-rs.git"
+
+keywords = ["tlsh", "locality", "sensitive", "hashing"]
+categories = ["algorithms"]
 
 [dependencies]
