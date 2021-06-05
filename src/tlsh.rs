@@ -1,6 +1,6 @@
 use crate::{
     helper::{
-        b_mapping, bit_distance, find_quartiles, l_capturing, mod_diff, BUCKET_SIZE, WINDOW_SIZE,
+        bit_distance, find_quartiles, l_capturing, mod_diff, pearson_hash, BUCKET_SIZE, WINDOW_SIZE,
     },
     TlshError,
 };
@@ -126,6 +126,8 @@ impl Tlsh {
     }
 
     /// Calculates the difference between two TLSH values.
+    ///
+    /// ```with_len``` controls whether the difference in length should be also considered in the calculation.
     pub fn diff(&self, other: &Tlsh, with_len: bool) -> usize {
         let mut result = 0;
 
@@ -198,7 +200,11 @@ impl TlshBuilder {
 
     /// Computes the quartiles and constructs the digest message and returns an instance of [`Tlsh`]
     /// that has all information needed to generate a hash value.
-    pub fn build(&self) -> Tlsh {
+    pub fn build(&self) -> Result<Tlsh, TlshError> {
+        if self.data_len < 50 {
+            Err(TlshError::MinSizeNotReached)?
+        }
+
         let (q1, q2, q3) = find_quartiles(&self.buckets, self.bucket_count);
 
         if q3 == 0 {
@@ -234,7 +240,7 @@ impl TlshBuilder {
             self.checksum_array.clone()
         };
 
-        Tlsh {
+        Ok(Tlsh {
             bucket_kind: self.bucket_kind,
             checksum_kind: self.checksum_kind,
             ver: self.ver,
@@ -243,7 +249,7 @@ impl TlshBuilder {
             q1ratio,
             q2ratio,
             codes: tmp,
-        }
+        })
     }
 
     /// Processes an input stream.
@@ -272,7 +278,7 @@ impl TlshBuilder {
             self.slide_window[j0] = data[ii];
 
             if fed_len >= 4 {
-                self.checksum = b_mapping(
+                self.checksum = pearson_hash(
                     0,
                     self.slide_window[j0],
                     self.slide_window[j1],
@@ -283,7 +289,7 @@ impl TlshBuilder {
                     self.checksum_array[0] = self.checksum;
 
                     for kk in 1..self.checksum_len {
-                        self.checksum_array[kk] = b_mapping(
+                        self.checksum_array[kk] = pearson_hash(
                             self.checksum_array[kk - 1],
                             self.slide_window[j0],
                             self.slide_window[j1],
@@ -293,10 +299,10 @@ impl TlshBuilder {
                 }
 
                 // Select 6 triplets out of 10. The last four are processed in the next iteration.
-                // A   - B   - C   - D   - E
-                // j0   j_1   j2   j3   j4
+                // A  - B   - C  - D  - E
+                // j0   j1    j2   j3   j4
 
-                let mut r = b_mapping(
+                let mut r = pearson_hash(
                     2,
                     self.slide_window[j0],
                     self.slide_window[j1],
@@ -304,7 +310,7 @@ impl TlshBuilder {
                 );
                 self.buckets[r as usize] += 1;
 
-                r = b_mapping(
+                r = pearson_hash(
                     3,
                     self.slide_window[j0],
                     self.slide_window[j1],
@@ -312,7 +318,7 @@ impl TlshBuilder {
                 );
                 self.buckets[r as usize] += 1;
 
-                r = b_mapping(
+                r = pearson_hash(
                     5,
                     self.slide_window[j0],
                     self.slide_window[j2],
@@ -320,7 +326,7 @@ impl TlshBuilder {
                 );
                 self.buckets[r as usize] += 1;
 
-                r = b_mapping(
+                r = pearson_hash(
                     7,
                     self.slide_window[j0],
                     self.slide_window[j2],
@@ -328,7 +334,7 @@ impl TlshBuilder {
                 );
                 self.buckets[r as usize] += 1;
 
-                r = b_mapping(
+                r = pearson_hash(
                     11,
                     self.slide_window[j0],
                     self.slide_window[j1],
@@ -336,7 +342,7 @@ impl TlshBuilder {
                 );
                 self.buckets[r as usize] += 1;
 
-                r = b_mapping(
+                r = pearson_hash(
                     13,
                     self.slide_window[j0],
                     self.slide_window[j3],
@@ -367,7 +373,7 @@ impl TlshBuilder {
     }
 }
 
-/// An enum determining the number of buckets for hashing
+/// An enum determining the number of buckets for hashing.
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum BucketKind {
     /// Hashing with 128 buckets.
@@ -404,7 +410,7 @@ impl ChecksumKind {
     }
 }
 
-/// An enum representing the version of TLSH
+/// An enum representing the version of TLSH.
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum Version {
     /// Original version, mapping to an empty string ```""```.

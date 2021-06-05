@@ -46,7 +46,7 @@ const _MAX_DATA_LEN: usize = TOPVAL[TOPVAL.len() - 1];
 static mut BIT_PAIRS_FLAG: bool = false;
 static mut BIT_PAIRS_DIFF: [[usize; 256]; 256] = [[0; 256]; 256];
 
-pub(crate) fn b_mapping(salt: u8, ii: u8, jj: u8, kk: u8) -> u8 {
+pub(crate) fn pearson_hash(salt: u8, ii: u8, jj: u8, kk: u8) -> u8 {
     let mut h = 0;
 
     h = V_TABLE[(h ^ salt) as usize];

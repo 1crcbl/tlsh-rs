@@ -1,7 +1,7 @@
 #![allow(unused_imports, dead_code)]
 use crate::{
     tlsh::{BucketKind, ChecksumKind, TlshBuilder},
-    Tlsh,
+    Tlsh, Version,
 };
 
 fn exe_test_str(
@@ -19,9 +19,11 @@ fn exe_test_str(
     full_str.push(char::from_u32(0).unwrap());
     full_str.replace_range(0..s.len(), s);
 
-    let mut builder = TlshBuilder::new(bucket, checksum, crate::tlsh::Version::Version4);
+    let mut builder = TlshBuilder::new(bucket, checksum, Version::Version4);
     builder.update(full_str.as_bytes());
-    let tlsh = builder.build();
+    let result = builder.build();
+    assert!(result.is_ok());
+    let tlsh = result.unwrap();
     assert_eq!(expected, tlsh.hash(), "Test case: {}", test_name);
 
     tlsh
@@ -150,7 +152,9 @@ fn test_update() {
         builder.update(chunk);
     }
 
-    let tlsh = builder.build();
+    let result = builder.build();
+    assert!(result.is_ok());
+    let tlsh = result.unwrap();
 
     assert_eq!(
         "T109F05A198CC69A5A4F0F9380A9EE93F2B927CF42089EA74276DC5F0BB2D34E68114448",
@@ -192,7 +196,9 @@ fn test_reset() {
         offset += len;
     }
 
-    let tlsh = builder.build();
+    let result = builder.build();
+    assert!(result.is_ok());
+    let tlsh = result.unwrap();
 
     assert_eq!(
         "T109F05A198CC69A5A4F0F9380A9EE93F2B927CF42089EA74276DC5F0BB2D34E68114448",
