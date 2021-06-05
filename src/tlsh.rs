@@ -1,12 +1,21 @@
-use crate::helper::{
-    b_mapping, bit_distance, find_quartiles, l_capturing, mod_diff, BUCKET_SIZE, WINDOW_SIZE,
+use crate::{
+    helper::{
+        b_mapping, bit_distance, find_quartiles, l_capturing, mod_diff, BUCKET_SIZE, WINDOW_SIZE,
+    },
+    TlshError,
 };
+
+const BUCKETS_A: [BucketKind; 2] = [BucketKind::Bucket128, BucketKind::Bucket256];
+const CHECKSUM_A: [ChecksumKind; 2] = [ChecksumKind::OneByte, ChecksumKind::ThreeByte];
+const VERSION_A: [Version; 2] = [Version::Original, Version::Version4];
 
 /// A struct containing all required information from an input stream to generate a hash value.
 ///
 /// An instance of this struct can be obtained by calling the function [`TlshBuilder::build`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Tlsh {
+    bucket_kind: BucketKind,
+    checksum_kind: ChecksumKind,
     ver: Version,
     checksum: Vec<u8>,
     len: usize,
@@ -16,9 +25,79 @@ pub struct Tlsh {
 }
 
 impl Tlsh {
+    /// Try to convert a hash string. Returns an instance of [`Tlsh`] if the conversion is successful.
+    pub fn from_str<T>(s: T) -> Result<Self, TlshError>
+    where
+        T: AsRef<str>,
+    {
+        let (mut bucket_kind, mut checksum_kind, mut ver) = (None, None, None);
+
+        'outer: for bk in &BUCKETS_A {
+            for ck in &CHECKSUM_A {
+                for v in &VERSION_A {
+                    if s.as_ref().len() == hash_len(*bk, *ck, *v) {
+                        bucket_kind = Some(*bk);
+                        checksum_kind = Some(*ck);
+                        ver = Some(*v);
+                        break 'outer;
+                    }
+                }
+            }
+        }
+
+        if bucket_kind.is_none() {
+            Err(TlshError::InvalidHashValue)?
+        }
+
+        let mut offset = ver.unwrap().ver().len();
+        let mut checksum = vec![0; checksum_kind.unwrap().checksum_len()];
+        let mut codes = vec![0; bucket_kind.unwrap().bucket_count() >> 2];
+
+        for ii in 0..checksum.len() {
+            checksum[ii] = u8::from_str_radix(
+                &s.as_ref()[offset..(offset + 2)]
+                    .chars()
+                    .rev()
+                    .collect::<String>(),
+                16,
+            )?;
+            offset += 2;
+        }
+
+        let len = usize::from_str_radix(
+            &s.as_ref()[offset..(offset + 2)]
+                .chars()
+                .rev()
+                .collect::<String>(),
+            16,
+        )?;
+        offset += 2;
+
+        let qratio: usize = usize::from_str_radix(&s.as_ref()[offset..(offset + 2)], 16)?;
+        offset += 2;
+
+        let clen = codes.len();
+
+        for ii in 0..clen {
+            codes[clen - ii - 1] = u8::from_str_radix(&s.as_ref()[offset..(offset + 2)], 16)?;
+            offset += 2;
+        }
+
+        Ok(Self {
+            bucket_kind: bucket_kind.unwrap(),
+            checksum_kind: checksum_kind.unwrap(),
+            ver: ver.unwrap(),
+            checksum: checksum,
+            len,
+            q1ratio: qratio >> 4,
+            q2ratio: qratio & 0xF,
+            codes,
+        })
+    }
+
     /// Computes and returns the hash value in hex-encoded string format.
     pub fn hash(&self) -> String {
-        let cap = self.ver.ver().len() + self.codes.len() * 2 + self.checksum.len() * 2 + 4;
+        let cap = hash_len(self.bucket_kind, self.checksum_kind, self.ver);
         let mut result = String::with_capacity(cap);
         result.push_str(self.ver.ver());
 
@@ -83,6 +162,8 @@ impl Tlsh {
 /// A builder struct for processing input stream(s).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TlshBuilder {
+    bucket_kind: BucketKind,
+    checksum_kind: ChecksumKind,
     buckets: [u32; BUCKET_SIZE],
     bucket_count: usize,
     checksum: u8,
@@ -101,6 +182,8 @@ impl TlshBuilder {
         let checksum_len = checksum.checksum_len();
 
         Self {
+            bucket_kind: bucket,
+            checksum_kind: checksum,
             buckets: [0; BUCKET_SIZE],
             bucket_count,
             checksum: 0,
@@ -152,6 +235,8 @@ impl TlshBuilder {
         };
 
         Tlsh {
+            bucket_kind: self.bucket_kind,
+            checksum_kind: self.checksum_kind,
             ver: self.ver,
             checksum: checksum,
             len,
@@ -285,9 +370,9 @@ impl TlshBuilder {
 /// An enum determining the number of buckets for hashing
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum BucketKind {
-    ///
+    /// Hashing with 128 buckets.
     Bucket128,
-    ///
+    /// Hashing with 256 buckets.
     Bucket256,
 }
 
@@ -335,4 +420,8 @@ impl Version {
             Version::Version4 => "T1",
         }
     }
+}
+
+fn hash_len(bucket: BucketKind, checksum: ChecksumKind, ver: Version) -> usize {
+    (bucket.bucket_count() >> 1) + (checksum.checksum_len() << 1) + ver.ver().len() + 4
 }

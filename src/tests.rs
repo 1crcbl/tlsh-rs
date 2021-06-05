@@ -140,7 +140,11 @@ fn test_update() {
     full_str.push(char::from_u32(0).unwrap());
     full_str.replace_range(0..s.len(), s);
 
-    let mut builder = TlshBuilder::new(BucketKind::Bucket128, ChecksumKind::OneByte, crate::tlsh::Version::Version4);
+    let mut builder = TlshBuilder::new(
+        BucketKind::Bucket128,
+        ChecksumKind::OneByte,
+        crate::tlsh::Version::Version4,
+    );
 
     for chunk in full_str.as_bytes().chunks(10) {
         builder.update(chunk);
@@ -148,8 +152,10 @@ fn test_update() {
 
     let tlsh = builder.build();
 
-    assert_eq!("T109F05A198CC69A5A4F0F9380A9EE93F2B927CF42089EA74276DC5F0BB2D34E68114448", tlsh.hash());
-
+    assert_eq!(
+        "T109F05A198CC69A5A4F0F9380A9EE93F2B927CF42089EA74276DC5F0BB2D34E68114448",
+        tlsh.hash()
+    );
 }
 
 #[test]
@@ -164,9 +170,13 @@ fn test_reset() {
     full_str.push(char::from_u32(0).unwrap());
     full_str.replace_range(0..s.len(), s);
 
-    let mut builder = TlshBuilder::new(BucketKind::Bucket128, ChecksumKind::OneByte, crate::tlsh::Version::Version4);
+    let mut builder = TlshBuilder::new(
+        BucketKind::Bucket128,
+        ChecksumKind::OneByte,
+        crate::tlsh::Version::Version4,
+    );
     builder.update(full_str.as_bytes());
-    
+
     builder.reset();
 
     let mut offset = 0;
@@ -184,5 +194,24 @@ fn test_reset() {
 
     let tlsh = builder.build();
 
-    assert_eq!("T109F05A198CC69A5A4F0F9380A9EE93F2B927CF42089EA74276DC5F0BB2D34E68114448", tlsh.hash());
+    assert_eq!(
+        "T109F05A198CC69A5A4F0F9380A9EE93F2B927CF42089EA74276DC5F0BB2D34E68114448",
+        tlsh.hash()
+    );
+}
+
+#[test]
+fn test_parse_str() {
+    let tlsh1 = exe_test_str(
+        "This is a test for Lili Diao. This is a string. Hello Hello Hello ",
+        512,
+        "T1096463F055A00114F31B8A069219E18273306B0EC081BBDF9D070C865DC638A0D910D029AE198CC69A5A4F0F9380A9EE93F2BA2BCF4208AEA74276DC5F0BB2D34E68114848",
+        BucketKind::Bucket256,
+        ChecksumKind::ThreeByte,
+        "Test string 1 | 256B - 3B",
+    );
+
+    let result = Tlsh::from_str(&tlsh1.hash());
+    assert!(result.is_ok());
+    assert!(tlsh1 == result.unwrap());
 }
