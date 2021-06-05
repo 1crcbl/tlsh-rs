@@ -1,5 +1,7 @@
 # TLSH-RS
 
+[![Crates.io](https://img.shields.io/crates/v/tlsh)](https://crates.io/crates/tlsh) [![Documentation](https://docs.rs/tlsh/badge.svg)](https://docs.rs/tlsh) [![Build](https://github.com/1crcbl/tlsh-rs/actions/workflows/main.yml/badge.svg)](https://github.com/1crcbl/tlsh-rs/actions/workflows/main.yml)
+
 This is a Rust port of Trend Micro Locality Sensitive Hash (TLSH) [[github]](https://github.com/trendmicro/tlsh), [[website]](https://tlsh.org/) algorithm to compute a hash value of a byte stream. These generated hash values can then be used for similarity detection, data clustering or nearest neighbour search.
 
 ## Overview
