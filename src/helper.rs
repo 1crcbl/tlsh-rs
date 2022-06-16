@@ -115,6 +115,9 @@ pub(crate) fn find_quartiles(buckets: &[u32], bucket_count: usize) -> (u32, u32,
     }
 
     let mut q3 = 0;
+    if sph == 0 {
+        sph = 1;
+    }
     high = end;
     for ii in 0..sph {
         low = shortcut_high[ii];
