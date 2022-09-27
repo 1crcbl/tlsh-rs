@@ -1,6 +1,6 @@
-use std::ops::{Add, Sub};
-
 use crate::error::TlshError;
+use std::cmp::Ordering::{Equal, Greater, Less};
+use std::ops::{Add, Sub};
 
 pub(crate) const BUCKET_SIZE: usize = 256;
 /// Size of a sliding window to process a byte string and populate an array of bucket counts.
@@ -73,16 +73,21 @@ pub(crate) fn find_quartiles(buckets: &[u32], bucket_count: usize) -> (u32, u32,
     let q2 = loop {
         let pivot = partition(&mut buckets_copy, low, high);
 
-        if pivot > p2 {
-            high = pivot - 1;
-            shortcut_high[sph] = pivot;
-            sph += 1;
-        } else if pivot < p2 {
-            low = pivot + 1;
-            shortcut_low[spl] = pivot;
-            spl += 1;
-        } else {
-            break buckets_copy[p2];
+        match pivot.cmp(&p2) {
+            Greater => {
+                high = pivot - 1;
+                shortcut_high[sph] = pivot;
+                sph += 1;
+            }
+            Less => {
+                low = pivot + 1;
+                shortcut_low[spl] = pivot;
+                spl += 1;
+            }
+
+            Equal => {
+                break buckets_copy[p2];
+            }
         }
     };
 
@@ -91,50 +96,55 @@ pub(crate) fn find_quartiles(buckets: &[u32], bucket_count: usize) -> (u32, u32,
 
     let mut q1 = 0;
     low = 0;
-    for ii in 0..spl {
-        high = shortcut_low[ii];
+    //for ii in 0..spl {
+    for item in shortcut_low.iter().take(spl) {
+        high = *item;
 
-        if high > p1 {
-            q1 = loop {
-                let pivot = partition(&mut buckets_copy, low, high);
-                if pivot > p1 {
-                    high = pivot - 1;
-                } else if pivot < p1 {
-                    low = pivot + 1;
-                } else {
-                    break buckets_copy[p1];
-                }
-            };
-            break;
-        } else if high < p1 {
-            low = high;
-        } else {
-            q1 = buckets_copy[p1];
-            break;
+        match high.cmp(&p1) {
+            Greater => {
+                q1 = loop {
+                    let pivot = partition(&mut buckets_copy, low, high);
+                    match pivot.cmp(&p1) {
+                        Greater => high = pivot - 1,
+                        Less => low = pivot + 1,
+                        Equal => break buckets_copy[p1],
+                    }
+                };
+                break;
+            }
+            Less => {
+                low = high;
+            }
+            Equal => {
+                q1 = buckets_copy[p1];
+                break;
+            }
         }
     }
 
     let mut q3 = 0;
     high = end;
-    for ii in 0..sph {
-        low = shortcut_high[ii];
-        if low < p3 {
-            q3 = loop {
-                let pivot = partition(&mut buckets_copy, low, high);
-                if pivot > p3 {
-                    high = pivot - 1;
-                } else if pivot < p3 {
-                    low = pivot + 1;
-                } else {
-                    break buckets_copy[p3];
-                }
-            };
-            break;
-        } else if low > p3 {
-            high = low;
-        } else {
-            q3 = buckets_copy[p3];
-            break;
+    for item in shortcut_high.iter().take(sph) {
+        low = *item;
+        match low.cmp(&p3) {
+            Less => {
+                q3 = loop {
+                    let pivot = partition(&mut buckets_copy, low, high);
+                    match pivot.cmp(&p3) {
+                        Less => low = pivot + 1,
+                        Greater => high = pivot - 1,
+                        Equal => break buckets_copy[p3],
+                    }
+                };
+                break;
+            }
+
+            Equal => {
+                q3 = buckets_copy[p3];
+                break;
+            }
+
+            Greater => high = low,
         }
     }
 
