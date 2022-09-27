@@ -20,7 +20,7 @@ fn exe_test_str(
     }
     full_str.push(char::from_u32(0).unwrap());
     full_str.replace_range(0..s.len(), s);
-    println!("{}", full_str);
+
     let mut builder = TlshBuilder::new(bucket, checksum, Version::Version4);
     builder.update(full_str.as_bytes());
     let result = builder.build();
