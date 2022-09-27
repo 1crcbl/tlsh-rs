@@ -1,4 +1,6 @@
 #![allow(unused_imports, dead_code)]
+use std::hash::Hash;
+
 use crate::{
     tlsh::{BucketKind, ChecksumKind, TlshBuilder},
     Tlsh, Version,
@@ -18,7 +20,7 @@ fn exe_test_str(
     }
     full_str.push(char::from_u32(0).unwrap());
     full_str.replace_range(0..s.len(), s);
-
+    println!("{}", full_str);
     let mut builder = TlshBuilder::new(bucket, checksum, Version::Version4);
     builder.update(full_str.as_bytes());
     let result = builder.build();
@@ -220,4 +222,21 @@ fn test_parse_str() {
     let result = Tlsh::from_str(&tlsh1.hash());
     assert!(result.is_ok());
     assert!(tlsh1 == result.unwrap());
+}
+
+#[test]
+fn test_valid_hash() {
+    let mut builder = TlshBuilder::new(
+        BucketKind::Bucket256,
+        ChecksumKind::ThreeByte,
+        Version::Version4,
+    );
+
+    // string respects the min size of 50 while not having enough randomness to get a hash from.
+    builder.update("oooooooooooooooooooooooooooooooooooooooooooooooooo".as_bytes());
+    let result = builder.build();
+    match result {
+        Err(crate::TlshError::NoValidHash) => assert!(true),
+        _ => assert!(false),
+    }
 }

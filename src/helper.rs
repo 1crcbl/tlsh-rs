@@ -168,7 +168,7 @@ pub(crate) fn partition(buckets: &mut [u32], low: usize, high: usize) -> usize {
     buckets[high] = buckets[result];
     buckets[result] = val;
 
-    return result;
+    result
 }
 
 pub(crate) fn l_capturing(len: usize) -> Result<usize, TlshError> {

@@ -87,7 +87,7 @@ impl Tlsh {
             bucket_kind: bucket_kind.unwrap(),
             checksum_kind: checksum_kind.unwrap(),
             ver: ver.unwrap(),
-            checksum: checksum,
+            checksum,
             len,
             q1ratio: qratio >> 4,
             q2ratio: qratio & 0xF,
@@ -134,18 +134,18 @@ impl Tlsh {
         if with_len {
             match mod_diff(self.len, other.len, 256) {
                 x @ 0..=1 => result = x,
-                x @ _ => result = x * 12,
+                x => result = x * 12,
             };
         }
 
         match mod_diff(self.q1ratio, other.q1ratio, 16) {
             x @ 0..=1 => result += x,
-            x @ _ => result += (x - 1) * 12,
+            x => result += (x - 1) * 12,
         }
 
         match mod_diff(self.q2ratio, other.q2ratio, 16) {
             x @ 0..=1 => result += x,
-            x @ _ => result += (x - 1) * 12,
+            x => result += (x - 1) * 12,
         }
 
         for ii in 0..self.checksum.len() {
@@ -208,7 +208,7 @@ impl TlshBuilder {
         let (q1, q2, q3) = find_quartiles(&self.buckets, self.bucket_count);
 
         if q3 == 0 {
-            panic!("q3 = 0")
+            Err(TlshError::NoValidHash)?
         }
 
         let mut tmp = vec![0; self.code_size];
@@ -244,7 +244,7 @@ impl TlshBuilder {
             bucket_kind: self.bucket_kind,
             checksum_kind: self.checksum_kind,
             ver: self.ver,
-            checksum: checksum,
+            checksum,
             len,
             q1ratio,
             q2ratio,

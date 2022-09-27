@@ -11,6 +11,8 @@ pub enum TlshError {
     MinSizeNotReached,
     /// Fails to parse a hex string to integer.
     ParseHexFailed,
+    // No valid hash found. See https://github.com/trendmicro/tlsh/issues/79
+    NoValidHash,
 }
 
 impl From<ParseIntError> for TlshError {
@@ -30,6 +32,10 @@ impl Display for TlshError {
                 write!(f, "TLSH requires an input of at least 50 bytes.")
             }
             TlshError::ParseHexFailed => write!(f, "Can't convert hex string to integer"),
+            TlshError::NoValidHash => write!(
+                f,
+                "No valid hash could be computed. See https://github.com/trendmicro/tlsh/issues/79"
+            ),
         }
     }
 }
