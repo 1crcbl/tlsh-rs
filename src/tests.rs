@@ -1,5 +1,5 @@
 #![allow(unused_imports, dead_code)]
-use std::hash::Hash;
+use std::{hash::Hash, str::FromStr};
 
 use crate::{
     tlsh::{BucketKind, ChecksumKind, TlshBuilder},
