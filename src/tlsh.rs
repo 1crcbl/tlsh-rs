@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::{
     helper::{
         bit_distance, find_quartiles, l_capturing, mod_diff, pearson_hash, BUCKET_SIZE, WINDOW_SIZE,
@@ -25,76 +27,6 @@ pub struct Tlsh {
 }
 
 impl Tlsh {
-    /// Try to convert a hash string. Returns an instance of [`Tlsh`] if the conversion is successful.
-    pub fn from_str<T>(s: T) -> Result<Self, TlshError>
-    where
-        T: AsRef<str>,
-    {
-        let (mut bucket_kind, mut checksum_kind, mut ver) = (None, None, None);
-
-        'outer: for bk in &BUCKETS_A {
-            for ck in &CHECKSUM_A {
-                for v in &VERSION_A {
-                    if s.as_ref().len() == hash_len(*bk, *ck, *v) {
-                        bucket_kind = Some(*bk);
-                        checksum_kind = Some(*ck);
-                        ver = Some(*v);
-                        break 'outer;
-                    }
-                }
-            }
-        }
-
-        if bucket_kind.is_none() {
-            Err(TlshError::InvalidHashValue)?
-        }
-
-        let mut offset = ver.unwrap().ver().len();
-        let mut checksum = vec![0; checksum_kind.unwrap().checksum_len()];
-        let mut codes = vec![0; bucket_kind.unwrap().bucket_count() >> 2];
-
-        for ii in 0..checksum.len() {
-            checksum[ii] = u8::from_str_radix(
-                &s.as_ref()[offset..(offset + 2)]
-                    .chars()
-                    .rev()
-                    .collect::<String>(),
-                16,
-            )?;
-            offset += 2;
-        }
-
-        let len = usize::from_str_radix(
-            &s.as_ref()[offset..(offset + 2)]
-                .chars()
-                .rev()
-                .collect::<String>(),
-            16,
-        )?;
-        offset += 2;
-
-        let qratio: usize = usize::from_str_radix(&s.as_ref()[offset..(offset + 2)], 16)?;
-        offset += 2;
-
-        let clen = codes.len();
-
-        for ii in 0..clen {
-            codes[clen - ii - 1] = u8::from_str_radix(&s.as_ref()[offset..(offset + 2)], 16)?;
-            offset += 2;
-        }
-
-        Ok(Self {
-            bucket_kind: bucket_kind.unwrap(),
-            checksum_kind: checksum_kind.unwrap(),
-            ver: ver.unwrap(),
-            checksum: checksum,
-            len,
-            q1ratio: qratio >> 4,
-            q2ratio: qratio & 0xF,
-            codes,
-        })
-    }
-
     /// Computes and returns the hash value in hex-encoded string format.
     pub fn hash(&self) -> String {
         let cap = hash_len(self.bucket_kind, self.checksum_kind, self.ver);
@@ -134,18 +66,18 @@ impl Tlsh {
         if with_len {
             match mod_diff(self.len, other.len, 256) {
                 x @ 0..=1 => result = x,
-                x @ _ => result = x * 12,
+                x => result = x * 12,
             };
         }
 
         match mod_diff(self.q1ratio, other.q1ratio, 16) {
             x @ 0..=1 => result += x,
-            x @ _ => result += (x - 1) * 12,
+            x => result += (x - 1) * 12,
         }
 
         match mod_diff(self.q2ratio, other.q2ratio, 16) {
             x @ 0..=1 => result += x,
-            x @ _ => result += (x - 1) * 12,
+            x => result += (x - 1) * 12,
         }
 
         for ii in 0..self.checksum.len() {
@@ -161,6 +93,69 @@ impl Tlsh {
     }
 }
 
+impl FromStr for Tlsh {
+    type Err = TlshError;
+    /// Try to convert a hash string. Returns an instance of [`Tlsh`] if the conversion is successful.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (mut bucket_kind, mut checksum_kind, mut ver) = (None, None, None);
+
+        'outer: for bk in &BUCKETS_A {
+            for ck in &CHECKSUM_A {
+                for v in &VERSION_A {
+                    if s.len() == hash_len(*bk, *ck, *v) {
+                        bucket_kind = Some(*bk);
+                        checksum_kind = Some(*ck);
+                        ver = Some(*v);
+                        break 'outer;
+                    }
+                }
+            }
+        }
+
+        if bucket_kind.is_none() {
+            Err(TlshError::InvalidHashValue)?
+        }
+
+        let mut offset = ver.unwrap().ver().len();
+        let mut checksum = vec![0; checksum_kind.unwrap().checksum_len()];
+        let mut codes = vec![0; bucket_kind.unwrap().bucket_count() >> 2];
+
+        for ii in 0..checksum.len() {
+            checksum[ii] = u8::from_str_radix(
+                &s[offset..(offset + 2)].chars().rev().collect::<String>(),
+                16,
+            )?;
+            offset += 2;
+        }
+
+        let len = usize::from_str_radix(
+            &s[offset..(offset + 2)].chars().rev().collect::<String>(),
+            16,
+        )?;
+        offset += 2;
+
+        let qratio: usize = usize::from_str_radix(&s[offset..(offset + 2)], 16)?;
+        offset += 2;
+
+        let clen = codes.len();
+
+        for ii in 0..clen {
+            codes[clen - ii - 1] = u8::from_str_radix(&s[offset..(offset + 2)], 16)?;
+            offset += 2;
+        }
+
+        Ok(Self {
+            bucket_kind: bucket_kind.unwrap(),
+            checksum_kind: checksum_kind.unwrap(),
+            ver: ver.unwrap(),
+            checksum,
+            len,
+            q1ratio: qratio >> 4,
+            q2ratio: qratio & 0xF,
+            codes,
+        })
+    }
+}
 /// A builder struct for processing input stream(s).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TlshBuilder {
@@ -208,7 +203,7 @@ impl TlshBuilder {
         let (q1, q2, q3) = find_quartiles(&self.buckets, self.bucket_count);
 
         if q3 == 0 {
-            panic!("q3 = 0")
+            Err(TlshError::NoValidHash)?
         }
 
         let mut tmp = vec![0; self.code_size];
@@ -244,7 +239,7 @@ impl TlshBuilder {
             bucket_kind: self.bucket_kind,
             checksum_kind: self.checksum_kind,
             ver: self.ver,
-            checksum: checksum,
+            checksum,
             len,
             q1ratio,
             q2ratio,
